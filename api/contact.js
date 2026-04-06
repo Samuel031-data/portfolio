@@ -36,8 +36,8 @@ async function initDB() {
     }
 }
 
-// Handler
-app.post('/api/contact', async (req, res) => {
+// Handler - Catch all POST requests to this function
+app.post('*', async (req, res) => {
     await initDB();
     const { name, email, subject, message } = req.body;
 
