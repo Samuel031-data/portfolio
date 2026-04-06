@@ -11,7 +11,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Serve static files from the root directory
+// Serve the home page
+app.get(['/', '/index.html'], (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// Serve other static files (CSS, JS, etc.)
 app.use(express.static(__dirname));
 
 // MySQL Pool setup
