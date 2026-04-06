@@ -14,10 +14,14 @@ app.use(express.json());
 app.use(express.static('public'));
 
 // MySQL Pool setup
-const pool = mysql.createPool(process.env.DATABASE_URL);
+const pool = process.env.DATABASE_URL ? mysql.createPool(process.env.DATABASE_URL) : null;
 
 // Database Initialization
 async function initDB() {
+    if (!pool) {
+        console.warn('DATABASE_URL not found. Skipping DB initialization.');
+        return;
+    }
     try {
         const connection = await pool.getConnection();
         console.log('Connected to Railway MySQL database.');
@@ -51,31 +55,44 @@ app.post('/api/contact', async (req, res) => {
     }
 
     try {
-        // 1. Save to Database
-        await pool.execute(
-            'INSERT INTO messages (name, email, subject, message) VALUES (?, ?, ?, ?)',
-            [name, email, subject || 'No Subject', message]
-        );
-        console.log('Message saved to database.');
+        // 1. Save to Database (if pool exists)
+        if (pool) {
+            await pool.execute(
+                'INSERT INTO messages (name, email, subject, message) VALUES (?, ?, ?, ?)',
+                [name, email, subject || 'No Subject', message]
+            );
+            console.log('Message saved to database.');
+        } else {
+            console.warn('Database URL missing. Skipping database save.');
+        }
 
-        // 2. Email transporter setup
-        const transporter = nodemailer.createTransport({
-            service: 'gmail',
-            auth: {
-                user: process.env.EMAIL_USER,
-                pass: process.env.EMAIL_PASS
+        // 2. Email transporter setup (if credentials exist)
+        if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+            const transporter = nodemailer.createTransport({
+                service: 'gmail',
+                auth: {
+                    user: process.env.EMAIL_USER,
+                    pass: process.env.EMAIL_PASS
+                }
+            });
+
+            const mailOptions = {
+                from: email,
+                to: process.env.EMAIL_USER,
+                subject: `New Portfolio Message: ${subject || 'Contact Request'}`,
+                text: `Name: ${name}\nEmail: ${email}\n\nMessage:\n${message}`
+            };
+
+            await transporter.sendMail(mailOptions);
+            res.status(200).json({ message: 'Message sent and saved successfully!' });
+        } else {
+            console.warn('Email credentials missing. Notification not sent.');
+            if (pool) {
+                res.status(200).json({ message: 'Message saved to database, but email notification failed (missing credentials).' });
+            } else {
+                res.status(500).json({ error: 'Server configuration error: No database or email service available.' });
             }
-        });
-
-        const mailOptions = {
-            from: email,
-            to: process.env.EMAIL_USER,
-            subject: `New Portfolio Message: ${subject || 'Contact Request'}`,
-            text: `Name: ${name}\nEmail: ${email}\n\nMessage:\n${message}`
-        };
-
-        await transporter.sendMail(mailOptions);
-        res.status(200).json({ message: 'Message sent and saved successfully!' });
+        }
     } catch (error) {
         console.error('Error handling contact form:', error);
         res.status(500).json({ error: 'An error occurred. Please try again later.' });
