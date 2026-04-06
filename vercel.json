@@ -3,7 +3,7 @@
   "rewrites": [
     {
       "source": "/api/contact",
-      "destination": "/api/contact.js"
+      "destination": "/api/contact"
     },
     {
       "source": "/(.*)",
