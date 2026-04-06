@@ -1,12 +1,5 @@
-require('dotenv').config();
-const express = require('express');
 const nodemailer = require('nodemailer');
-const cors = require('cors');
 const mysql = require('mysql2/promise');
-
-const app = express();
-app.use(cors());
-app.use(express.json());
 
 // MySQL Pool setup
 const pool = process.env.DATABASE_URL ? mysql.createPool(process.env.DATABASE_URL) : null;
@@ -36,16 +29,23 @@ async function initDB() {
     }
 }
 
-// Handler - Catch all POST requests to this function
-app.post('*', async (req, res) => {
-    await initDB();
-    const { name, email, subject, message } = req.body;
-
-    if (!name || !email || !message) {
-        return res.status(400).json({ error: 'Please provide all required fields.' });
+// Native Vercel Handler
+module.exports = async (req, res) => {
+    // 1. Only allow POST
+    if (req.method !== 'POST') {
+        res.setHeader('Allow', 'POST');
+        return res.status(405).json({ error: 'Method Not Allowed' });
     }
 
     try {
+        await initDB();
+        const { name, email, subject, message } = req.body;
+
+        if (!name || !email || !message) {
+            return res.status(400).json({ error: 'Please provide all required fields.' });
+        }
+
+        // 2. Save to Database
         if (pool) {
             await pool.execute(
                 'INSERT INTO messages (name, email, subject, message) VALUES (?, ?, ?, ?)',
@@ -53,6 +53,7 @@ app.post('*', async (req, res) => {
             );
         }
 
+        // 3. Email Notification
         if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
             const transporter = nodemailer.createTransport({
                 service: 'gmail',
@@ -68,18 +69,12 @@ app.post('*', async (req, res) => {
                 subject: `New Portfolio Message: ${subject || 'Contact Request'}`,
                 text: `Name: ${name}\nEmail: ${email}\n\nMessage:\n${message}`
             });
-            res.status(200).json({ message: 'Message sent and saved successfully!' });
+            return res.status(200).json({ message: 'Message sent and saved successfully!' });
         } else {
-            if (pool) {
-                res.status(200).json({ message: 'Message saved to database, but email credentials missing.' });
-            } else {
-                res.status(500).json({ error: 'Server configuration error: No database or email available.' });
-            }
+            return res.status(200).json({ message: 'Message saved, but email notification skipped (missing settings).' });
         }
     } catch (error) {
         console.error('API Error:', error);
-        res.status(500).json({ error: 'An error occurred. Please try again!' });
+        return res.status(500).json({ error: `Server error: ${error.message}` });
     }
-});
-
-module.exports = app;
+};

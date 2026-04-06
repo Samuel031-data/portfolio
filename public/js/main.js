@@ -67,7 +67,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             } catch (error) {
                 console.error('Fetch error:', error);
-                responseDiv.textContent = 'Failed to connect to the server.';
+                // Enhanced error reporting
+                responseDiv.textContent = `Error: ${error.message}. Please check your connection.`;
                 responseDiv.className = 'form-response error';
             } finally {
                 submitBtn.textContent = originalText;
